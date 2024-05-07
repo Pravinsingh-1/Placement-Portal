@@ -1,0 +1,75 @@
+import speech_recognition as sr
+import librosa
+import numpy as np
+import os
+from sklearn.mixture import GaussianMixture
+
+# Function to extract features from audio
+def extract_features(signal, sr):
+    features = librosa.feature.mfcc(signal, sr=sr, n_mfcc=40)
+    features = np.transpose(features)
+    return features
+
+# Load audio signal for each speaker
+def load_signal(path):
+    signal, sr = librosa.load(path)
+    return signal, sr
+
+# Train GMM model
+def train_gmm(features, num_components):
+    gmm = GaussianMixture(n_components=num_components)
+    gmm.fit(features)
+    return gmm
+
+# Get log-likelihood for the audio signal
+def log_likelihood(gmm, signal):
+    return gmm.score(signal)
+
+# Get log-likelihood for each audio file
+def get_log_likelihood(gmm, audio_files):
+    log_likelihood_scores = []
+    for audio_file in audio_files:
+        signal, sr = load_signal(audio_file)
+        features = extract_features(signal, sr)
+        log_likelihood_scores.append(log_likelihood(gmm, features))
+    return log_likelihood_scores
+
+# Get speaker index based on maximum log-likelihood
+def get_speaker_index(log_likelihood_scores):
+    return np.argmax(log_likelihood_scores)
+
+# Load audio files for each speaker
+audio_files = []
+for file in os.listdir("audios"):
+    if file.endswith(".wav"):
+        audio_files.append("audios/" + file)
+
+# Extract features for each audio file
+features = []
+for audio_file in audio_files:
+    signal, sr = load_signal(audio_file)
+    features.append(extract_features(signal, sr))
+
+# Train GMM model
+gmm = train_gmm(features, num_components=16)
+
+# Initialize recognizer class (for recognizing the speech)
+r = sr.Recognizer()
+
+# Reading Microphone as source
+# listening the speech and store in audio_text variable
+with sr.Microphone() as source:
+    print("Talk")
+    audio_text = r.listen(source)
+    print("Time over, thanks")
+
+# recoginize_() method will throw a request error if the API is unreachable, hence using exception handling
+try:
+    # using google speech recognition
+    speech_text = r.recognize_google(audio_text, show_all=True)
+    alternatives = speech_text["alternative"]
+    confidence_scores = [alt["confidence"] for alt in alternatives]
+    best_hypothesis = alternatives[np.argmax(confidence_scores)]["transcript"]
+    print("Speech-to-text output: " + best_hypothesis)
+except:
+    print("Sorry, I did not get that
